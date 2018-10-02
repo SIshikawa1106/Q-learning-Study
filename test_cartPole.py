@@ -43,8 +43,9 @@ def q_learning(env, num, maxStep):
 
     agent_num = len(brain_agents)
     action_num = 2
+    max_step_size = 500.0
 
-    model = QTable([3, 90, 90], [-3, -90, -90], 6, action_num)
+    model = QTable([3, 90, 90], [-3, -90, -90], 8, action_num)
 
     agents = [None]*agent_num
     for i in range(agent_num):
@@ -53,39 +54,31 @@ def q_learning(env, num, maxStep):
     actions = np.zeros((agent_num), dtype=int)
 
     continuous_count = np.zeros((agent_num), dtype=int)
-    max_continuous_count = 0
-    episode = 0
-
     loss_log = []
-    max_continuous_log = []
-    count_log = []
-    continuous_log = [None]*agent_num
-
-    fig, axis1 = plot.subplots()
-    axis2 = axis1.twinx()
-    axis1.legend(loc='lower right')
-    axis2.legend(loc='lower right')
+    epsilon_log = []
+    continuous_rate_log = [[]]*agent_num
+    episode_log = [[]]*agent_num
+    step_log = []
 
     for step in range(maxStep):
         for idx in range(agent_num):
             state = vector_observations[idx]
             reward = rewards[idx]
             is_end = done[idx]
+
             if is_end:
                 agents[idx].stop(state, reward)
                 actions[idx] = np.random.randint(2)
+
+                #for log
+                episode_log[idx] = episode_log[idx] + [len(episode_log[idx])+1]
+                continuous_rate_log[idx] = continuous_rate_log[idx] + [continuous_count[idx]*100.0/max_step_size]
                 continuous_count[idx] = 0
             else:
-                actions[idx] = agents[idx].act_and_train(state, reward, episode)
+                actions[idx] = agents[idx].act_and_train(state, reward, step)
+
+                #for log
                 continuous_count[idx] += 1
-                episode += 1
-
-            if continuous_count[idx]>max_continuous_count:
-                max_continuous_count = continuous_count[idx]
-
-            if continuous_log[idx] is None:
-                continuous_log[idx] = []
-            continuous_log[idx].append(continuous_count[idx])
 
         action_info = env.step(vector_action=actions)
 
@@ -105,20 +98,42 @@ def q_learning(env, num, maxStep):
         print("statistic", agents[0].get_statistics())
         """
 
-        count_log.append(step)
-        max_continuous_log.append(max_continuous_count)
+        step_log.append(step)
         loss_log.append(agents[0].get_statistics()["average_loss"])
+        epsilon_log.append(agents[0].get_statistics()["epsilon"])
 
-        if step % 500 == 0:
-            axis1.plot(count_log, max_continuous_log, label="max continuous count", color='r')
-            axis2.plot(count_log, loss_log, label="average loss", color="c")
+        #if step % 500 == 0:
 
-            continuous_log_colors = ["b","g","m","y","k","magenta"]
-            for idx, val in enumerate(continuous_log):
-                axis1.plot(count_log, val, label="continuous count [{}]".format(idx), color=continuous_log_colors[idx])
 
-            plot.pause(0.001)
-            plot.cla()
+    plot.subplot(3, 1, 1)
+    plot.plot(step_log, loss_log, label="average loss")
+    plot.legend(loc='lower right', fontsize=8)
+
+    plot.subplot(3, 1, 2)
+    plot.plot(step_log, epsilon_log, label="epsilon")
+    plot.legend(loc='lower right', fontsize=8)
+
+    plot.subplot(3,1,3)
+    continuous_log_colors = ["b","g","m","y","k","magenta"]
+    for idx, val in enumerate(continuous_rate_log):
+        plot.plot(episode_log[idx], val, label="continuous count [{}]".format(idx), color=continuous_log_colors[idx])
+    plot.legend(loc='lower right', fontsize=8)
+
+    """
+    fig, axis1 = plot.subplots()
+    axis2 = axis1.twinx()
+    axis1.legend(loc='lower right')
+    axis2.legend(loc='lower right')
+
+    max_episode_log = max(episode_log, key=len)
+    axis2.plot(max_episode_log, loss_log, label="average loss", color="c")
+
+    continuous_log_colors = ["b","g","m","y","k","magenta"]
+    for idx, val in enumerate(continuous_rate_log):
+        axis1.plot(episode_log[idx], val, label="continuous count [{}]".format(idx), color=continuous_log_colors[idx])
+    """
+
+    plot.show()
 
 
 
@@ -130,6 +145,6 @@ if __name__ == "__main__":
     num = 6
 
     #random_test(env, num, 10000)
-    q_learning(env, num, 10**5)
+    q_learning(env, num, 10**4)
 
     env.close()
